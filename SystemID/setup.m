@@ -21,18 +21,18 @@ elseif ENABLE_PWM == 1
     set_param('MP_BearinglessMotor/Voltage Source Inverter/Ideal Voltage Source Inverter', 'Commented', 'on'); 
 end
 
-Tend = 0.02; % Simulation stop time
+Tend = 1; % Simulation stop time
 
 V_DC = 160; % DC bus (V)
 
-torque_cmd = 0.2; % Torque reference (Nm)
+torque_cmd = 0; % Torque reference (Nm)
 torque_start = 0.002; % Torque start time (s)
 torque_end = 0.025; % Torque end time (s)
 
-fx_cmd = 9; % fx force reference (N)
+fx_cmd = 0; % fx force reference (N)
 fx_start = 0.002; % x-axis force start time (s)
 fx_end = 0.025; % x-axis force end time (s)
-fy_cmd = -4.5; % fy force reference (N)
+fy_cmd = 0; % fy force reference (N)
 fy_start = 0.001; % y-axis force start time (s)
 fy_end = 0.025; % y-axis force end time (s)
 
@@ -41,6 +41,11 @@ id_start = 0; % d-axis current start time (s)
 id_end = 0.025; % d-axis current end time (s)
 
 speed_cmd = 7500; % Speed command (r/min)
+
+%% Signal injection
+f_init = 1; % Initial frequency of chirp signal (Hz)
+f_target = 1e3; % Traget frequency of chirp signal (Hz)
+vd_inj = 1; % Amplitude of d-axis voltage chirp (V)
 
 %% Plant parameters
 p = 4; % Number of torque pole-pair
@@ -128,10 +133,7 @@ out = sim('six_phase_plant.slx');
 runObj = Simulink.sdi.Run.getLatest;
 
 % List of variables to extract
-obj2ext = {'time','vd','vq','id_cmd','iq_cmd','id','iq','torque', ...
-                  'vx','vy','ix_cmd','iy_cmd','ix','iy','fx','fy', ...
-                  'phase_current', ...
-                  'EMF_1', 'EMF_2', 'EMF_3', 'EMF_4', 'EMF_5', 'EMF_6'};
+obj2ext = {'time','vd_inj','id'};
 
 % Get signal IDs and store signals into array
 for idx = 2:length(obj2ext)
@@ -150,76 +152,23 @@ Inch_SS = get(0,'screensize');
 lw = 1;  % line width
 
 figure1 = figure;
-% Plot phase current
-subplot(3,2,1);
+% Plot voltage
+subplot(2,1,1);
 hold on;
-colors = lines(6); % Generate 6 types of colors
-for i = 1:6 % Columns 1-6 contain current data
-    plot(time, squeeze(sig_val.phase_current(:,i)), 'Color', colors(i,:), 'LineWidth', lw);
-end
 xlabel('Time [s]','Interpreter','latex');
-ylabel('Phase current (A)','Interpreter','latex');
-legend('Phase 1','Phase 2','Phase 3','Phase 4','Phase 5','Phase 6','Interpreter','latex','Location','east');
+plot(time, squeeze(sig_val.vd_inj), 'Color', 'k', 'LineWidth', lw);
+ylabel('Voltage (V)','Interpreter','latex');
+legend('v_d','Interpreter','latex','Location','east');
 xlim([0 Tend]);
 % ylim([-2.5 2.5]);
 
-% Plot back-emf
-subplot(3,2,2);
+% Plot current
+subplot(2,1,2);
 hold on;
-colors = lines(6); % Generate 6 types of colors
-plot(time, squeeze(sig_val.EMF_1), 'Color', colors(1,:), 'LineWidth', lw);
-plot(time, squeeze(sig_val.EMF_2), 'Color', colors(2,:), 'LineWidth', lw);
-plot(time, squeeze(sig_val.EMF_3), 'Color', colors(3,:), 'LineWidth', lw);
-plot(time, squeeze(sig_val.EMF_4), 'Color', colors(4,:), 'LineWidth', lw);
-plot(time, squeeze(sig_val.EMF_5), 'Color', colors(5,:), 'LineWidth', lw);
-plot(time, squeeze(sig_val.EMF_6), 'Color', colors(6,:), 'LineWidth', lw);
 xlabel('Time [s]','Interpreter','latex');
-ylabel('Back-EMF (V)','Interpreter','latex');
-legend('Phase 1','Phase 2','Phase 3','Phase 4','Phase 5','Phase 6','Interpreter','latex','Location','east');
-xlim([0 Tend]);
-% ylim([-2.5 2.5]);
-
-% Plot torque and force
-subplot(3,2,3);
-hold on;
-plot(time, squeeze(sig_val.id_cmd), 'Color', [231/255, 143/255, 106/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.iq_cmd), 'Color', [0/255, 108/255, 186/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.id), 'Color', [136/255, 62/255, 150/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.iq), 'Color', [237/255, 170/255, 33/255], 'LineWidth', lw);
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Torque current (A)','Interpreter','latex');
-legend('$i_d^*$', '$i_q^*$', '$i_d$', '$i_q$','Interpreter','latex','Location','east');
-xlim([0 Tend]);
-% ylim([-2.5 2.5]);
-
-subplot(3,2,4);
-hold on;
-plot(time, squeeze(sig_val.ix_cmd), 'Color', [231/255, 143/255, 106/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.iy_cmd), 'Color', [0/255, 108/255, 186/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.ix), 'Color', [136/255, 62/255, 150/255], 'LineWidth', lw);
-plot(time, squeeze(sig_val.iy), 'Color', [237/255, 170/255, 33/255], 'LineWidth', lw);
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Suspension current (A)','Interpreter','latex');
-legend('$i_x^*$', '$i_y^*$', '$i_x$', '$i_y$','Interpreter','latex','Location','east');
-xlim([0 Tend]);
-% ylim([-2.5 2.5]);
-
-subplot(3,2,5);
-hold on;
-plot(time, squeeze(sig_val.torque), 'Color', 'k', 'LineWidth', lw);
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Torque (Nm)','Interpreter','latex');
-legend('Torque','Interpreter','latex','Location','east');
-xlim([0 Tend]);
-% ylim([-2.5 2.5]);
-
-subplot(3,2,6);
-hold on;
-plot(time, squeeze(sig_val.fx), 'Color', 'r', 'LineWidth', lw);
-plot(time, squeeze(sig_val.fy), 'Color', 'b', 'LineWidth', lw);
-xlabel('Time [s]','Interpreter','latex');
-ylabel('Force (N)','Interpreter','latex');
-legend('$f_x$','$f_y$','Interpreter','latex','Location','east');
+plot(time, squeeze(sig_val.vd_inj), 'Color', 'k', 'LineWidth', lw);
+ylabel('Current (A)','Interpreter','latex');
+legend('i_d','Interpreter','latex','Location','east');
 xlim([0 Tend]);
 % ylim([-2.5 2.5]);
 

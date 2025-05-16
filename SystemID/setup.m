@@ -193,7 +193,7 @@ hold on;
 xlabel('Time [s]','Interpreter','latex');
 plot(time, squeeze(sig_val.vd_inj), 'Color', 'k', 'LineWidth', lw);
 ylabel('Voltage (V)','Interpreter','latex');
-legend('v_d','Interpreter','latex','Location','east');
+legend('$v_d$','Interpreter','latex','Location','east');
 xlim([0 Tend]);
 % ylim([-2.5 2.5]);
 
@@ -203,7 +203,7 @@ hold on;
 xlabel('Time [s]','Interpreter','latex');
 plot(time, squeeze(sig_val.id), 'Color', 'k', 'LineWidth', lw);
 ylabel('Current (A)','Interpreter','latex');
-legend('i_d','Interpreter','latex','Location','east');
+legend('$i_d$','Interpreter','latex','Location','east');
 xlim([0 Tend]);
 % ylim([-2.5 2.5]);
 

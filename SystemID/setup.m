@@ -21,7 +21,7 @@ elseif ENABLE_PWM == 1
     set_param('MP_BearinglessMotor/Voltage Source Inverter/Ideal Voltage Source Inverter', 'Commented', 'on'); 
 end
 
-Tend = 1; % Simulation stop time
+Tend = 10; % Simulation stop time
 
 V_DC = 160; % DC bus (V)
 
@@ -40,10 +40,10 @@ id_cmd = 0; % id current reference (A)
 id_start = 0; % d-axis current start time (s)
 id_end = 0.025; % d-axis current end time (s)
 
-speed_cmd = 7500; % Speed command (r/min)
+speed_cmd = 0; % Speed command (r/min)
 
 %% Signal injection
-f_init = 10; % Initial frequency of chirp signal (Hz)
+f_init = 1; % Initial frequency of chirp signal (Hz)
 f_target = 1e3; % Traget frequency of chirp signal (Hz)
 vd_inj = 1; % Amplitude of d-axis voltage chirp (V)
 
@@ -98,7 +98,7 @@ Lt = L_alpha_beta(1,1);
 Ls = L_alpha_beta(3,3);
 
 %% Machine constants
-Ke = 0.003;  % back-emf constant (Vpk/(mech rad/s))
+Ke = 0;  % back-emf constant (Vpk/(mech rad/s))
 Kt = 0.02; % Torque constant (Nm/Apk)
 Kf = 1.8; % Force constant (N/Apk)
 
@@ -126,7 +126,7 @@ Kp_s = Ls*wb; % Suspension current regulation P gain
 Ki_s = R*wb; % Suspension current regulation I gain
 
 %% Run simulation
-% out = sim('six_phase_plant.slx');
+out = sim('six_phase_plant.slx');
 
 %% Post processing
 % Extract simulation data 
@@ -149,15 +149,12 @@ num = squeeze(sig_val.id);
 den = squeeze(sig_val.vd_inj);
 
 %% Generate FRF Data
-
-% TODO: Appropriately update these settings per your application
-lines = 4000;
+lines = 1e5;
 win = 'hann'; % try 'hann' or 'rectwin'
 
 [freq, mag, phase, coh] = generateFRF(num, den, Tsim, lines, win);
 
 %% Estimate RL
-
 % Find where frequency goes positive
 idx_f_pos = find(freq >= 0, 1);
 
@@ -166,8 +163,7 @@ data = frd(mag(idx_f_pos:end).*exp(1j*deg2rad(phase(idx_f_pos:end))), 2*pi*freq(
 
 % Use the data object to estimate the transfer function
 num_poles = 1;
-num_zeros = 1;
-sys = tfest(data,num_poles,num_zeros);
+sys = tfest(data, num_poles);
 
 % Print sys to console to see how well it worked
 sys
@@ -175,7 +171,7 @@ sys
 [Z,gain] = zero(sys);
 P = pole(sys)
 
-Rp_estimated = -P / gain;
+Rp_estimated = -P/gain;
 Lp_estimated = 1/gain;
 
 fprintf('Estimated resistance: %0.8f, actual: %0.8f, error: %f pct\n', ...
@@ -241,6 +237,16 @@ markersize = 8;
 
 plot(ax1, freq, mag, '.', 'markersize', markersize);
 plot(ax2, freq, phase, '.', 'markersize', markersize);
+
+hold (ax1, 'on'); 
+hold (ax2, 'on'); 
+
+% Set ideal transfer function here to overlay the curve fit
+Gp = tf([0 1], [Lt R]);
+[mag_ideal, phase_ideal] = bode(Gp, freq*2*pi);
+plot(ax1, freq, squeeze(mag_ideal), 'r');
+plot(ax2, freq, squeeze(phase_ideal), 'r');
+
 if SHOW_COHERENCE == 1
     plot(ax3, freq, coh, '.', 'markersize', markersize);
 end
@@ -268,8 +274,11 @@ grid(ax2, 'on');
 set(ax1, 'xscale', 'log');
 set(ax2, 'xscale', 'log');
 
-%ylim(ax1, [0 6]);
-%ylim(ax2, [-120 10]);
+% ylim(ax1, [0 6]);
+% ylim(ax2, [-120 10]);
+
+legend(ax1, {'FRF obtained from using tfestimate', 'Ideal FRF'}, 'Location', 'southwest');
+legend(ax2, {'FRF obtained from using tfestimate', 'Ideal FRF'}, 'Location', 'southwest');
 
 if SHOW_COHERENCE == 1
     xlim(ax3, [f1 f2]);
@@ -278,10 +287,8 @@ if SHOW_COHERENCE == 1
     set(ax3, 'xscale', 'log');
 end
 
-% print(gcf, "-dpng", '-noui', "bode_plot", '-r300');
 set(findall(gcf, '-property', 'FontName'), 'FontName', 'Times New Roman');
 
-% set(figure2,'Units','inches','Position',[(Inch_SS(3)-width)/2 (Inch_SS(4)-height)/2 width height]);
 print(figure2, '-dsvg','-noui','bode_plot');
 print(figure2, '-dpng','-r300','bode_plot');
 
@@ -290,7 +297,7 @@ function [freq, mag, phase, coh] = generateFRF(num, den, T, lines, win)
 
 	fs = 1/T;
 	overlap = lines/2;
-	averages = floor(length(num)/(lines-overlap))
+	averages = floor(length(num)/(lines-overlap));
 	windowType = window(win, lines);
 	
 	[FRF, freq] = tfestimate(den, num, windowType, overlap, lines, fs);

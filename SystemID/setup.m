@@ -43,7 +43,7 @@ id_end = 0.025; % d-axis current end time (s)
 speed_cmd = 7500; % Speed command (r/min)
 
 %% Signal injection
-f_init = 1; % Initial frequency of chirp signal (Hz)
+f_init = 10; % Initial frequency of chirp signal (Hz)
 f_target = 1e3; % Traget frequency of chirp signal (Hz)
 vd_inj = 1; % Amplitude of d-axis voltage chirp (V)
 
@@ -126,7 +126,7 @@ Kp_s = Ls*wb; % Suspension current regulation P gain
 Ki_s = R*wb; % Suspension current regulation I gain
 
 %% Run simulation
-out = sim('six_phase_plant.slx');
+% out = sim('six_phase_plant.slx');
 
 %% Post processing
 % Extract simulation data 
@@ -143,6 +143,45 @@ for idx = 2:length(obj2ext)
 end
 
 time = sig_obj.(obj2ext{2}).Values.Time;
+
+%% Select Data for FRF
+num = squeeze(sig_val.id);
+den = squeeze(sig_val.vd_inj);
+
+%% Generate FRF Data
+
+% TODO: Appropriately update these settings per your application
+lines = 4000;
+win = 'hann'; % try 'hann' or 'rectwin'
+
+[freq, mag, phase, coh] = generateFRF(num, den, Tsim, lines, win);
+
+%% Estimate RL
+
+% Find where frequency goes positive
+idx_f_pos = find(freq >= 0, 1);
+
+% Create data object of only positive freq response
+data = frd(mag(idx_f_pos:end).*exp(1j*deg2rad(phase(idx_f_pos:end))), 2*pi*freq(idx_f_pos:end));
+
+% Use the data object to estimate the transfer function
+num_poles = 1;
+num_zeros = 1;
+sys = tfest(data,num_poles,num_zeros);
+
+% Print sys to console to see how well it worked
+sys
+
+[Z,gain] = zero(sys);
+P = pole(sys)
+
+Rp_estimated = -P / gain;
+Lp_estimated = 1/gain;
+
+fprintf('Estimated resistance: %0.8f, actual: %0.8f, error: %f pct\n', ...
+    Rp_estimated, R, 100 * (Rp_estimated - R)/R);
+fprintf('Estimated inductance: %0.8f, actual: %0.8f, error: %f pct\n', ...
+    Lp_estimated, Lt, 100 * (Lp_estimated - Lt)/Lt);
 
 %% Plot figure
 width = 2*5.43; 
@@ -166,7 +205,7 @@ xlim([0 Tend]);
 subplot(2,1,2);
 hold on;
 xlabel('Time [s]','Interpreter','latex');
-plot(time, squeeze(sig_val.vd_inj), 'Color', 'k', 'LineWidth', lw);
+plot(time, squeeze(sig_val.id), 'Color', 'k', 'LineWidth', lw);
 ylabel('Current (A)','Interpreter','latex');
 legend('i_d','Interpreter','latex','Location','east');
 xlim([0 Tend]);
@@ -177,3 +216,90 @@ set(findall(gcf, '-property', 'FontName'), 'FontName', 'Times New Roman');
 set(figure1,'Units','inches','Position',[(Inch_SS(3)-width)/2 (Inch_SS(4)-height)/2 width height]);
 print(figure1, '-dsvg','-noui','plot_results');
 print(figure1, '-dpng','-r300','plot_results');
+
+%% Plot Estimation
+
+% Show coherence plot?
+% 1: yes
+% 0: no
+SHOW_COHERENCE = 1;
+
+figure2 = figure;
+
+if SHOW_COHERENCE == 1
+    tiledlayout(3,1);
+    ax1 = nexttile;
+    ax2 = nexttile;
+    ax3 = nexttile;
+else
+    tiledlayout(2,1);
+    ax1 = nexttile;
+    ax2 = nexttile;
+end
+
+markersize = 8;
+
+plot(ax1, freq, mag, '.', 'markersize', markersize);
+plot(ax2, freq, phase, '.', 'markersize', markersize);
+if SHOW_COHERENCE == 1
+    plot(ax3, freq, coh, '.', 'markersize', markersize);
+end
+
+ylabel(ax1, "Magnitude (-)");
+ylabel(ax2, "Phase (deg)");
+if SHOW_COHERENCE == 1
+    ylabel(ax3, "Coherence");
+end
+
+if SHOW_COHERENCE == 1
+    xlabel(ax3, "Frequency (Hz)");
+else
+    xlabel(ax2, "Frequency (Hz)");
+end
+
+f1 = f_init;
+f2 = f_target;
+xlim(ax1, [f1 f2]);
+xlim(ax2, [f1 f2]);
+
+grid(ax1, 'on');
+grid(ax2, 'on');
+
+set(ax1, 'xscale', 'log');
+set(ax2, 'xscale', 'log');
+
+%ylim(ax1, [0 6]);
+%ylim(ax2, [-120 10]);
+
+if SHOW_COHERENCE == 1
+    xlim(ax3, [f1 f2]);
+    ylim(ax3, [0 1.1]);
+    grid(ax3, 'on');
+    set(ax3, 'xscale', 'log');
+end
+
+% print(gcf, "-dpng", '-noui', "bode_plot", '-r300');
+set(findall(gcf, '-property', 'FontName'), 'FontName', 'Times New Roman');
+
+% set(figure2,'Units','inches','Position',[(Inch_SS(3)-width)/2 (Inch_SS(4)-height)/2 width height]);
+print(figure2, '-dsvg','-noui','bode_plot');
+print(figure2, '-dpng','-r300','bode_plot');
+
+%% generateFRF function
+function [freq, mag, phase, coh] = generateFRF(num, den, T, lines, win)
+
+	fs = 1/T;
+	overlap = lines/2;
+	averages = floor(length(num)/(lines-overlap))
+	windowType = window(win, lines);
+	
+	[FRF, freq] = tfestimate(den, num, windowType, overlap, lines, fs);
+	[coh, freq] = mscohere(den, num, windowType, overlap, lines, fs);
+	
+	FRF = fftshift(FRF);
+	coh = fftshift(coh);
+	freq = freq - max(freq)/2;
+	mag = abs(FRF);
+	phase = angle(FRF) * 180/pi;
+
+end

@@ -5,7 +5,7 @@ close all
 % Set PWM flag: 1 to enable PWM voltage, 0 to disable and use ideal voltage source
 ENABLE_PWM = 0;
 
-load_system('six_phase_plant') % load Simulink model
+load_system('BearinglessMotorSimulation') % load Simulink model
 load_system('MP_BearinglessMotor') % load Simulink model
 
 %% Sampling time
@@ -126,7 +126,7 @@ Kp_s = Ls*wb; % Suspension current regulation P gain
 Ki_s = R*wb; % Suspension current regulation I gain
 
 %% Run simulation
-out = sim('six_phase_plant.slx');
+out = sim('BearinglessMotorSimulation.slx');
 
 %% Post processing
 % Extract simulation data 
